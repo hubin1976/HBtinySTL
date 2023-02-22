@@ -12,6 +12,7 @@ namespace HBtinySTL {
 		T m_data;
 	};
 
+	/*list的迭代器不能使用普通的指针，list占据的内存空间并不连续，我们需要重载*,->,++,--运算符来确保其功能*/
 	template<typename T, typename Ref, typename Ptr>
 	class list_iterator {
 	private:
@@ -27,7 +28,7 @@ namespace HBtinySTL {
 		typedef list_iterator<T, T&, T*>				iterator;
 		typedef list_iteartor<T, const T&, const T*>	const_iterator;
 
-		Node* m_node;
+		Node* m_node;		//指向iterator实际包含的节点
 		void m_incr() { m_node = m_node->m_next; }
 		void m_decr() { m_node = m_node->m_prev; }
 
@@ -42,6 +43,7 @@ namespace HBtinySTL {
 			return m_node != x.m_node;
 		}
 		reference operator*() const { return m_node->m_data; }
+		pointer operator->()const { return &(operator*()); }
 		self& operator++() {
 			this->m_incr();
 			return *this;
@@ -65,12 +67,12 @@ namespace HBtinySTL {
 	template<typename T, typename Alloc>
 	class list_base {
 	protected:
-		list_node<T>* m_node;
+		list_node<T>* m_node;	//是尾部节点之后的一个空白节点，并无实际内容
 
 	protected:
 		typedef simple_alloc<list_node<T>, Alloc> Alloc_type;
-		list_node* m_get_node() { return Alloc_type::allocate(1); }
-		void m_put_node(list_node* p) { Alloc_type::deallocate(p, 1); }
+		list_node* m_get_node() { return Alloc_type::allocate(1); }//申请一个节点的内存
+		void m_put_node(list_node* p) { Alloc_type::deallocate(p, 1); }//释放一个节点的内存
 	public:
 		typedef Alloc allocator_type;
 		allocator_type get_allocator() { return allocator_type(); }
@@ -84,6 +86,7 @@ namespace HBtinySTL {
 			clear();
 			m_put_node(m_node);
 		}
+		/*析构并释放除自身之外的所有节点*/
 		void clear() {
 			list_node<T>* cur = m_node->next;
 			while (cur != m_node) {
@@ -122,6 +125,7 @@ namespace HBtinySTL {
 		typedef reverse_iterator<const_iterator>		const_reverse_itearor;
 
 	protected:
+		/*调用m_get_node申请内存并且constuct*/
 		node* m_create_node(const T& x) {
 			node* p = m_get_node();
 			try {
@@ -149,8 +153,8 @@ namespace HBtinySTL {
 
 		iterator begin() { return m_node->m_next; }
 		const_iterator begin() const { return m_node->m_next; }
-		iterator end() { return m_node->m_prev; }
-		const_iterator end() const { return m_node->m_prev; }
+		iterator end() { return m_node; }//m_node是指向尾节点之后的空白节点，直接返回m_node即可
+		const_iterator end() const { return m_node; }
 
 		reverse_iterator rbegin() {
 			return reverse_iterator(end());
@@ -165,20 +169,23 @@ namespace HBtinySTL {
 			return const_reverse_iterator(begin());
 		}
 		bool empty()const { return m_node->m_next == m_node; }
+
 		size_type size() const {
 			size_type result = 0;
 			distance(begin(), end(), result);
 			return result;
 		}
+
 		size_type max_size() const { return size_type(-1); }
 
 		reference front() { return *begin(); }
 		const_reference front()const { return *begin(); }
-		reference back() { return *(--end()); }
+		reference back() { return *(--end()); }//end()返回以m_node初始化的临时迭代器，并对其自减，不影响list中的内容
 		const_reference back() const { return *(--end()); }
 
-		void swap(list<T, Alloc>& x) { std::swap(m_node, x.m_node); }
+		void swap(list<T, Alloc>& x) { std::swap(m_node, x.m_node); }//和vector中内容相同，不交换内容，交换地址
 
+		/*在position之前插入，用x初始化，返回新节点地址*/
 		iterator insert(iterator position, const T& x) {
 			node* temp = m_create_node(x);
 			temp->m_next = position.m_node;
@@ -214,7 +221,7 @@ namespace HBtinySTL {
 		void push_back(const T& x) { insert(end(), x); }
 		void push_back() { insert(end()); }
 
-		/*移除position上的元素，释放内存*/
+		/*移除position上的元素，释放内存，返回擦除后的next节点迭代器*/
 		iterator erase(iterator position) {
 			list_node* next_node = position.m_node->m_next;
 			list_node* prev_node = position.m_node->m_prev;
@@ -237,7 +244,7 @@ namespace HBtinySTL {
 		void resize(size_type new_size, const T& x) {
 			iterator temp = begin();
 			size_type len = 0;
-			for (; temp != end() && len < new_size; ++len, ++temp)
+			for (; temp != end() && len < new_size; ++len, ++temp)//找到new_size对应的节点，删除多余节点或新增不足节点
 				;
 			if (len == new_size)
 				erase(temp, end());
@@ -268,44 +275,22 @@ namespace HBtinySTL {
 
 		~list() {}
 
-		list<T, Alloc>& operator=(const list<T, Alloc>& x) {
-			if (&x == this) return *this;
-			iterator first1 = begin(), last1 = end();
-			const_iterator first2 = x.begin(), last2 = x.end();
-			while (first1 != last1 && first2 != last2)
-				*first1++ = *first2++;
-			if (first2 == last2)
-				erase(first1, last1);
-			else
-				insert(last1, first2, last2);
-			return *this;
-		}
+		list<T, Alloc>& operator=(const list<T, Alloc>& x);
 
 	public:
 		/*指定链表长度为n，内容为val*/
 		void assign(size_type n, const T& val) { m_fill_assign(n, val); }
-		void m_fill_assign(size_type n, const T& val) {
-			iterator temp = begin();
-			for (; n > 0 && temp != end(); ++temp, --n) {
-				*temp = val;
-			}
-			if (n > 0) {
-				insert(end(), n, val);
-			}
-			else {
-				erase(temp, end());
-			}
-		}
+		void m_fill_assign(size_type n, const T& val);
 
 	protected:
-		/*将[first, last)中的元素移动到position之前*/
+		/*将一段list中[first, last)的元素移动到position之前*/
 		void transfer(iterator position, iterator first, iterator last) {
 			if (position != last) {
-
+				//将[first, last)从旧list中剥离
 				last.m_node->m_prev->m_next = position.m_node;
 				first.m_node->m_prev->m_next = last.m_node;
 				position.m_node->m_prev->m_next = first.m_node;
-
+				//放入新的list
 				list_node* temp = position.m_node->m_prev;
 				position.m_node->m_prev = last.m_node->m_prev;
 				last.m_node->m_prev = first.m_node->m_prev;
@@ -345,7 +330,7 @@ namespace HBtinySTL {
 			}
 		}
 
-		/*清除链表中的重复元素，仅保留一个*/
+		/*清除链表中的重复相邻元素，仅保留一个*/
 		void unique() {
 			if (begin() == end()) return;
 			iterator first = begin(), last = end();
@@ -389,13 +374,13 @@ namespace HBtinySTL {
 
 
 		void sort() {
-			if (m_node->m_next == m_node || m_node->m_next->m_next == m_node)
+			if (m_node->m_next == m_node || m_node->m_next->m_next == m_node)//仅有0，1个节点
 				return;
 			list<T, Alloc> carry;
 			list<T, Alloc> counter[64];
 			int fill = 0;
 			while (!empty()) {
-				carry.splice(carry.begin(), *this, begin());
+				carry.splice(carry.begin(), *this, begin());//算法说明可见https://blog.csdn.net/qq_31720329/article/details/85535787
 				int i = 0;
 				while (i < fill && !counter[i].empty()) {
 					counter[i].merge(carry);
@@ -427,6 +412,42 @@ namespace HBtinySTL {
 		return lexicographical_compare(x.begin(), x.end(),
 			y.begin(), y.end());
 	}
+
+	template<typename T, typename Alloc>
+	list<T, Alloc>::operator=(const list<T, Alloc>& x) {
+		if (&x == this) return *this;
+		iterator first1 = begin(), last1 = end();
+		const_iterator first2 = x.begin(), last2 = x.end();
+		while (first1 != last1 && first2 != last2)
+			*first1++ = *first2++;
+		if (first2 == last2)//若x较短，则擦除多余元素
+			erase(first1, last1);
+		else//若x较长，则为list1申请新节点
+			insert(last1, first2, last2);
+		return *this;
+	}
+
+	/*指定链表长度为n，多余内容用val填充*/
+	template<typename T, typename Alloc>
+	void list<T, Alloc>::m_fill_assign(size_type n, const T& val) {
+		iterator temp = begin();
+		for (; n > 0 && temp != end(); ++temp, --n) {//找到n对应的节点或到达链表的尾部，然后擦除多余节点或插入不足节点
+			*temp = val;
+		}
+		if (n > 0) {
+			insert(end(), n, val);
+		}
+		else {
+			erase(temp, end());
+		}
+	}
+
+
+
+
+
+
+
 
 }
 

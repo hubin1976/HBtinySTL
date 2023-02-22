@@ -1,7 +1,11 @@
 #ifndef _HBTINYSTL_QUEUE_H_
 #define _HBTINYSTL_QUEUE_H_
+
+#include<deque.h>
+
 namespace HBtinySTL {
-    template <class T, class Sequence>
+    //容器适配器，以deque为底层实现
+    template <class T, class Sequence = deque<T>>
     class queue {
 
         typedef typename Sequence::value_type Sequence_value_type;

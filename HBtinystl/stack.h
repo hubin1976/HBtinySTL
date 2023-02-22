@@ -1,10 +1,10 @@
 #ifndef _HBTINYSTL_STACK_H_
 #define _HBTINYSTL_STACK_H_
 
-#include<memory.h>
 #include<deque.h>
 namespace HBtinySTL {
 
+	//ÈİÆ÷ÊÊÅäÆ÷£¬ÒÔdequeÎªµ×²ã
 	template<typename T, typename Sequence = deque<T>>
 	class {
 		typedef typename Sequence::value_type Sequence_value_type;

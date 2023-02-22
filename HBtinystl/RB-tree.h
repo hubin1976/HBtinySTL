@@ -1,5 +1,7 @@
 #ifndef _HBTINYSTL_RBTREE_H_
 #define _HBTINYSTL_RBTREE_H_
+#include<memory.h>
+#include<iterator.h>
 
 namespace HBtinySTL {
 	typedef bool rb_tree_color_type;
@@ -15,12 +17,12 @@ namespace HBtinySTL {
 		base_ptr m_left;
 		base_ptr m_right;
 
-		static base_ptr minimun(base_ptr x) {
+		static base_ptr minimun(base_ptr x) {//当前节点为根节点的子树的最小值
 			while (x->m_left != 0)
 				x = x->left;
 			return x;
 		}
-		static base_ptr maximun(base_ptr x) {
+		static base_ptr maximun(base_ptr x) {//当前节点为根节点的子树的最大值
 			while (x->m_right != 0)
 				x = x->right;
 			return x;
@@ -38,14 +40,17 @@ namespace HBtinySTL {
 		typedef ptrdiff_t difference_type;
 		base_ptr m_node;
 
+		/*找到后继节点*/
 		void m_increment() {
-			if (m_node->m_right != 0) {
+			if (m_node->m_color == rb_tree_red && m_node->m_parent->m_parent == m_node)//仅有一个节点
+				m_node = m_node->m->right;
+			else if (m_node->m_right != 0) {//右子树的最左节点
 				m_node = m_node->m_right;
 				while (m_node->m_left != 0)
 					m_node = m_node->m_left;
 			}
 			else {
-				base_ptr y = m_node->m_parent;
+				base_ptr y = m_node->m_parent;//若无右子树则找到到根节点路径上最先为左子节点的父节点的parent节点
 				while (m_node == y->m_right) {
 					m_node = y;
 					y = y->m_parent;
@@ -54,17 +59,18 @@ namespace HBtinySTL {
 					m_node = y;
 			}
 		}
+		/*找到前驱节点*/
 		void m_decrement() {
-			if (m_node->m_color == rb_tree_red && m_node->m_parent->m_parent == m_node)
+			if (m_node->m_color == rb_tree_red && m_node->m_parent->m_parent == m_node)//仅有一个节点
 				m_node = m_node->m->right;
-			else if (m_node->m_left != 0) {
+			else if (m_node->m_left != 0) {//左子树的最右节点
 				base_ptr y = m_node->m_left;
 				while (y->m_right != 0)
 					y = y->m_right;
 				m_node = y;
 			}
 			else {
-				base_ptr y = m_node->m_parent;
+				base_ptr y = m_node->m_parent;//如上
 				while (m_node == y->m_left) {
 					m_node = y;
 					y = y->m_parent;
@@ -106,6 +112,7 @@ namespace HBtinySTL {
 		return x.m_node != y.m_node;
 	}
 
+	/*左旋，将x的右子节点提上来*/
 	inline void rb_tree_rotate_left(rb_tree_node_base* x, rb_tree_node_base*& root) {
 		rb_tree_node_base* y = x->m_right;
 		x->m_right = y->m_left;
@@ -121,6 +128,7 @@ namespace HBtinySTL {
 		y->m_left = x;
 		x->parent = y;
 	}
+	/*右旋，将x的左子节点提上来*/
 	inline void rb_tree_rotate_right(rb_tree_node_base* x, rb_tree_node_base*& root) {
 		rb_tree_node_base* y = x->m_left;
 		x->m_left = y->m_right;
@@ -136,28 +144,29 @@ namespace HBtinySTL {
 		y->m_right = x;
 		x->parent = y;
 	}
+
 	inline void rb_tree_rebalance(rb_tree_node_base* x, rb_tree_node_base*& root) {
 		x->m_color = rb_tree_red;
-		while (x != root && x->m_parent->m_color == rb_tree_red) {
-			if (x->m_parent == x->m_parent->m_parent->m_left) {
-				rb_tree_node_base* y = x->m_parent->m_parent->m_right;
-				if (y && y->m_color == rb_tree_red) {
+		while (x != root && x->m_parent->m_color == rb_tree_red) {//若x为红且父节点为黑则插入x不影响
+			if (x->m_parent == x->m_parent->m_parent->m_left) {//x的父节点是左子节点
+				rb_tree_node_base* y = x->m_parent->m_parent->m_right;//y为伯父节点
+				if (y && y->m_color == rb_tree_red) {//若父节点及伯父节点为红，则将他们改为黑，将爷爷节点改为红，继续向上调整
 					x->m_parent->m_color = rb_tree_black;
 					y->m_color = rb_tree_black;
 					x->m_parent->m_parent->m_color = rb_tree_red;
 					x = x->m_parent->m_parent;
 				}
-				else {
-					if (x == x->m_parent->m_right) {
+				else {//
+					if (x == x->m_parent->m_right) {//若为‘左右’，则需要先进行一次左旋
 						x = x->m_parent;
-						rb_tree_rotate_left(x, root);
+						rb_tree_rotate_left(x, root);//左旋之后，x依然为最底层的子节点
 					}
-					x->m_parent->m_color = rb_tree_black;
-					x->m_parent->m_parent->color = rb_tree_red;
-					rb_tree_rotate_right(x->m_parent->m_parent, root);
+					x->m_parent->m_color = rb_tree_black;//此时的情况为父节点为红，爷爷节点为黑，且伯父节点不存在
+					x->m_parent->m_parent->color = rb_tree_red;//令父节点为黑，爷节点为红
+					rb_tree_rotate_right(x->m_parent->m_parent, root);//右旋后，则父节点为黑，爷节点变为伯父节点，颜色平衡
 				}
 			}
-			else {
+			else {//与上一种情况对称
 				rb_tree_node_base* y = x->m_parent->m_parent->m_left;
 				if (y && y->m_color == rb_tree_red) {
 					x->m_parent->m_color = rb_tree_black;
@@ -176,12 +185,13 @@ namespace HBtinySTL {
 				}
 			}
 		}
-		root->m_color = rb_tree_black;
+		root->m_color = rb_tree_black;//防止回溯到 x==root 根节点变为红色
 	}
 	inline rb_tree_node_base* rb_tree_rebalance_for_erase(rb_tree_node_base* z, rb_tree_node_base* root, rb_tree_node_base* leftmost, rb_tree_node_base* rightmost) {
 		rb_tree_node_base* y = z;
 		rb_tree_node_base* x = 0;
 		rb_tree_node_base* x_parent = 0;
+		//先调整树形，然后处理颜色
 		if (y->m_left == 0)
 			x = y->m_right;
 		else
@@ -193,17 +203,17 @@ namespace HBtinySTL {
 					y = y->m_left;
 				x = y->m_right;
 			}
-		if (y != z) {
+		if (y != z) {//z不只有一个子节点，将自己的后继提上来
 			z->m_left->m_parent = y;
 			y->m_left = z->m_left;//处理z的左子节点
-			if (y != z->m_right) {
+			if (y != z->m_right) {//当y是z的后继却不是z的右子节点时，需要处理y的右子树和y的parent
 				x_parent = y->m_parent;
 				if (x) x->m_parent = y->m_parent;
 				y->m_parent->m_left = x;
 				y->m_right = z->m_right;
-				z->m_right->m_parent = y;//当y是z的后继却不是z的右子节点时，需要处理y的右子树和y的parent
-			}							//当y是z的后继也是z的右子节点时，y同样没有左子树，此时不需要处理y的右子树和y的parent
-			else
+				z->m_right->m_parent = y;
+			}							
+			else//当y是z的后继也是z的右子节点时，y同样没有左子树，此时不需要处理y的右子树和y的parent
 				x_parent = y;
 			if (root == z)
 				root = y;
@@ -215,7 +225,7 @@ namespace HBtinySTL {
 			std::swap(y->m_color, z->m_color);
 			y = z;
 		}
-		else {
+		else {//z只有一个子节点，将其提上来就行
 			x_parent = y->m_parent;
 			if (x) x->m_parent = y->m_parent;
 			if (root == z)
@@ -236,23 +246,24 @@ namespace HBtinySTL {
 				else
 					rightmost = rb_tree_node_base::maximun(x);
 		}
+		//接下来处理红黑树的颜色问题
 		if (y->m_color == rb_tree_red) return y;
 		while (x != root && (x == 0 || x->m_color == rb_tree_black))
 			if (x == x_parent->left) {
-				rb_tree_node_base* w = x_parent->m_right;
-				if (w->m_color == rb_tree_red) {
+				rb_tree_node_base* w = x_parent->m_right;//w为伯父节点
+				if (w->m_color == rb_tree_red) {//情况3，伯父节点为红色，左旋后转入情况4
 					w->m_color = rb_tree_black;
 					x_parent->m_color = rb_tree_red;
 					rb_tree_rotate_left(x_parent, root);
 					w = x_parent->m_right;
 				}
-				if (w->m_left == 0 || w->m_left->m_color == rb_tree_black && w->m_right == 0 || w->m_right->m_color == rb_tree_black) {
+				if ((w->m_left == 0 || w->m_left->m_color == rb_tree_black) && (w->m_right == 0 || w->m_right->m_color == rb_tree_black)) {//情况4中w的左右子节点均为黑
 					w->m_color = rb_tree_red;
 					x = x_parent;
 					x_parent = x_parent->m_parent;
 				}
 				else {
-					if (w->m_right == 0 || w->m_right->m_color == rb_tree_black) {
+					if (w->m_right == 0 || w->m_right->m_color == rb_tree_black) {//左子节点为红时，需要先右旋
 						if (w->m_left)w->m_left->m_color = rb_tree_black;
 						w->m_color = rb_tree_red;
 						rb_tree_rotate_right(w, root);
@@ -265,7 +276,7 @@ namespace HBtinySTL {
 					break;
 				}
 			}
-			else {
+			else {//与上述情况对称
 				rb_tree_node_base* w = x_parent->m_left;
 				if (w->m_color == rb_tree_red) {
 					w->m_color = rb_tree_black;
@@ -307,7 +318,7 @@ namespace HBtinySTL {
 		~rb_tree_base() { m_put_node(m_header); }
 
 	protected:
-		rb_tree_node<T*> m_header;
+		rb_tree_node<T*> m_header;//头节点不是根节点，父节点指向根节点，左子节点指向最小节点，右子节点指向最大节点
 
 		typedef simple_alloc<rb_tree_node<T>, Alloc> Alloc_type;
 		rb_tree_node<T*> m_get_node() {
@@ -339,6 +350,7 @@ namespace HBtinySTL {
 		typedef typename Base::allocator_type allocator_type;
 		allocator_type get_allocator() const { return Base::get_allocator(); }
 	protected:
+		/*申请内存并且construct*/
 		link_type m_create_node(const value_type& x) {
 			link_type temp = m_get_node();
 			try {
@@ -349,6 +361,7 @@ namespace HBtinySTL {
 			}
 			return temp;
 		}
+		/*返回x的clone节点，已经申请内存*/
 		link_type m_clone_node(link_type x) {
 			link_type temp = m_create_node(x->m_value);
 			temp->m_color = m->color;
@@ -356,13 +369,14 @@ namespace HBtinySTL {
 			temp->m_right = 0;
 			return temp;
 		}
+		/*析构并释放*/
 		void destroy_node(link_type p) {
 			destroy(&p->m_value);
 			m_put_node(p);
 		}
 	protected:
-		size_type m_node_count;
-		Compare m_key_compare;
+		size_type m_node_count;//节点数量
+		Compare m_key_compare;//键值的比较方式
 
 		link_type& m_root()const {
 			return m_header->m_parent;
@@ -448,7 +462,7 @@ namespace HBtinySTL {
 			else {
 				s_color(m_header) = rb_tree_red;
 				m_root() = m_copy(x.m_root(), m_header);
-				m_leftmost() = s_minimun(m_root());
+				m_leftmost() = s_minimun(m_root());//处理m_header的左右子节点
 				m_rightmost() = s_maximun(m_root());
 			}
 			m_node_count = m_node_count;
@@ -484,7 +498,7 @@ namespace HBtinySTL {
 		}
 
 	public:
-		pair<iterator, bool> insert_unique(const value_type& x);
+		pair<iterator, bool> insert_unique(const value_type& v);
 		iterator insert_equal(const value_type& x);
 		iterator insert_unique(iterator position, const value_type& x);
 		iterator insert_equal(iterator position, const value_type& x);
@@ -500,10 +514,10 @@ namespace HBtinySTL {
 		void erase(const key_type* first, const key_type* last);
 		void clear() {
 			if (m_node_count != 0) {
-				m_earse(m_root());
+				m_erase(m_root());//清理根节点及其子树
 				m_leftmost() = m_header;
 				m_root() = 0;
-				m_rightmost() = m_header;
+				m_rightmost() = m_header;//处理头节点点
 				m_node_count = 0;
 			}
 		}
@@ -518,7 +532,7 @@ namespace HBtinySTL {
 		pair<iterator, iterator> equal_range(const key_type& x);
 		pair<const_iterator, const_iterator> equal_range(const key_type& x) const;
 	public:
-		rb_verify() const;
+		bool rb_verify() const;
 	};
 	template<typename Key, typename Value, typename Keyofvalue, typename Compare, typename Alloc>
 	inline bool operator==(const rb_tree<Key, Value, Keyofvalue, Compare, Alloc>& x, const rb_tree<Key, Value, Keyofvalue, Compare, Alloc>& y) {
@@ -550,8 +564,8 @@ namespace HBtinySTL {
 	typename rb_tree<Key, Value, Keyofvalue, Compare, Alloc>::iterator
 		rb_tree<Key, Value, Keyofvalue, Compare, Alloc>::m_insert(Base_ptr x, Base_ptr y, const value_type& v) {
 		link_type z;
-		if (y == m_header || x != 0 || m_key_compare(Keyofvalue()(v), s_key(yy))) {
-			z = m_create_node(y);
+		if (y == m_header || x != 0 || m_key_compare(Keyofvalue()(v), s_key(yy))) {/*判断y是否为头节点，x控制是否强制v为y的左子节点*/
+			z = m_create_node(v);
 			s_left(y) = z;
 			if (y == m_header) {
 				m_root() = z;
@@ -561,7 +575,7 @@ namespace HBtinySTL {
 				m_leftmost() = z;
 		}
 		else {
-			z = m_create_node(y);
+			z = m_create_node(v);
 			s_right(y) = z;
 			if (y == m_rightmost())
 				m_rightmost() = z;
@@ -579,7 +593,7 @@ namespace HBtinySTL {
 		rb_tree<Key, Value, Keyofvalue, Compare, Alloc>::insert_equal(const Value& v) {
 		link_type y = m_header;
 		link_type x = m_root();
-		while (x != 0) {
+		while (x != 0) {//x是最后v应该插入的叶子节点
 			y = x;
 			x = m_key_compare(Keyofvalue()(v), s_key(x)) ? s_left(x) : s_right(x);
 		}
@@ -588,22 +602,22 @@ namespace HBtinySTL {
 
 	template<typename Key, typename Value, typename Keyofvalue, typename Compare, typename Alloc>
 	pair<typename rb_tree<Key, Value, Keyofvalue, Compare, Alloc>::iterator, bool>
-		rb_tree<Key, Value, Keyofvalue, Compare, Alloc>::insert_unique(const Value& v) {
+		rb_tree<Key, Value, Keyofvalue, Compare, Alloc>::insert_unique(const value_type& v) {
 		link_type y = m_header;
 		link_type x = m_root();
 		bool comp = true;
-		while (x != 0) {
+		while (x != 0) {//x是最后v应该插入的叶子节点
 			y = x;
-			comp = m_key_compare(Keyofvalue()(v), s_key(x));//< 时为false，>=为true
+			comp = m_key_compare(Keyofvalue()(v), s_key(x));
 			x = comp ? s_left(x) : s_right(x);
 		}
 		iterator j = iterator(y);
-		if (comp)//y->m_value > v
+		if (comp)//x是y的左子节点
 			if (j == begin())
-				return pair<iterator, bool>(m_insert(x, y, v), true);
+				return pair<iterator, bool>(m_insert(x, y, v), true);//x成为新的最小节点，没有重复
 			else
-				--j;//j->m_vlaue <= v
-		if (m_key_compare(s_key(j.m_node), Keyofvalue()(v))//j->m_value < v
+				--j;//令j为y的前驱
+		if (m_key_compare(s_key(j.m_node), Keyofvalue()(v))//比较j和x来判断x是否重复，若x是y的左子节点，那么j就是y的前驱，否则j就是y，因为如x与y相等，那么x是y的右子节点
 			return pair<iterator, bool>(m_insert(x, y, v), true);
 			return pair<iterator, bool>(j, false);
 	}
@@ -614,8 +628,7 @@ namespace HBtinySTL {
 		if (position.m_node == m_header->m_left) { // begin()
 			if (size() > 0 &&
 				!m_key_compare(s_key(position.m_node), Keyofvalue()(v)))
-				return m_insert(position.m_node, position.m_node, v);
-			// first argument just needs to be non-null 
+				return m_insert(position.m_node, position.m_node, v); 
 			else
 				return insert_equal(v);
 		}
@@ -633,8 +646,7 @@ namespace HBtinySTL {
 				if (s_right(before.m_node) == 0)
 					return m_insert(0, before.m_node, v);
 				else
-					return m_insert(position.m_node, position.m_node, v);
-				// first argument just needs to be non-null 
+					return m_insert(position.m_node, position.m_node, v); 
 			}
 			else
 				return insert_equal(v);
@@ -660,7 +672,6 @@ namespace HBtinySTL {
 			if (size() > 0 &&
 				m_key_compare(Keyofvalue()(v)), s_key(position.m_node))
 				return m_insert(position.m_node, position.m_node, v);
-			// first argument just needs to be non-null 
 			else
 				return insert_unique(v).first;
 		}
@@ -679,7 +690,6 @@ namespace HBtinySTL {
 					return m_insert(0, before.m_node, v);
 				else
 					return m_insert(position.m_node, position.m_node, v);
-				// first argument just needs to be non-null 
 			}
 			else
 				return insert_unique(v).first;
@@ -704,17 +714,21 @@ namespace HBtinySTL {
 		destroy_node(y);
 		--m_node_count;
 	}
+	
+	/*擦除x为键值的节点，返回其数量*/
 	template<typename Key, typename Value, typename Keyofvalue, typename Compare, typename Alloc>
 	typename rb_tree<Key, Value, Keyofvalue, Compare, Alloc>::size_type
-		rb_tree<Key, Value, Keyofvalue, Compare, Alloc>::erase(const Key& x) {
+		rb_tree<Key, Value, Keyofvalue, Compare, Alloc>::erase(const key_type& x) {
 		pair<iterator, iterator> p = equal_range(x);
 		size_type n = 0;
 		distance(p.first, p.second, n);
 		erase(p.first, p.second);
 		return n;
 	}
+	
+	/*摧毁以x为根节点的整棵子树，没有rebalence*/
 	template<typename Key, typename Value, typename Keyofvalue, typename Compare, typename Alloc>
-	void rb_tree<Key, Value, Keyofvalue, Compare, Alloc>::m_erase(link_type x) {//摧毁整棵子树，没有rebalance
+	void rb_tree<Key, Value, Keyofvalue, Compare, Alloc>::m_erase(link_type x) {
 		while (x != 0) {
 			m_erase(s_right(x));
 			link_type y = s_left(x);
@@ -722,10 +736,12 @@ namespace HBtinySTL {
 			x = y;
 		}
 	}
+	
 	template<typename Key, typename Value, typename Keyofvalue, typename Compare, typename Alloc>
-	void rb_tree<Key, Value, Keyofvalue, Compare, Alloc>::erase(const Key* first, const Key* last) {
+	void rb_tree<Key, Value, Keyofvalue, Compare, Alloc>::erase(const key_type* first, const key_type* last) {
 		while (first != last) erase(*first++);
 	}
+	
 	template<typename Key, typename Value, typename Keyofvalue, typename Compare, typename Alloc>
 	void rb_tree<Key, Value, Keyofvalue, Compare, Alloc>::erase(iterator first, iterator last) {
 		if (first == begin() && last == end())
@@ -734,19 +750,14 @@ namespace HBtinySTL {
 			while (first != last) erase(first++);
 	}
 
-
-
-
-
-
-
+	/*返回第一个大于等于k的数*/
 	template<typename Key, typename Value, typename Keyofvalue, typename Compare, typename Alloc>
 	typename rb_tree<Key, Value, Keyofvalue, Compare, Alloc>::iterator
-		rb_tree<Key, Value, Keyofvalue, Compare, Alloc>::find(const Key& k) {//第一个>=k的数
+		rb_tree<Key, Value, Keyofvalue, Compare, Alloc>::find(const key_type& k) {
 		link_type y = m_header;
 		link_type x = m_root();
 		while (x != 0)
-			if (!m_key_compare(s_key(x), k))
+			if (!m_key_compare(s_key(x), k))//令y是第一个>=k的数
 				y = x, x = s_left(x);
 			else
 				x = s_right(x);
@@ -754,9 +765,10 @@ namespace HBtinySTL {
 		return (j == end() || m_key_compare(k, s_key(j.m_node))) ?
 			end() : j;
 	}
+	
 	template<typename Key, typename Value, typename Keyofvalue, typename Compare, typename Alloc>
 	typename rb_tree<Key, Value, Keyofvalue, Compare, Alloc>::const_iterator
-		rb_tree<Key, Value, Keyofvalue, Compare, Alloc>::find(const Key& k) const {
+		rb_tree<Key, Value, Keyofvalue, Compare, Alloc>::find(const key_type& k) const {
 		link_type y = m_header;
 		link_type x = m_root();
 		while (x != 0)
@@ -768,17 +780,34 @@ namespace HBtinySTL {
 		return (j == end() || m_key_compare(k, s_key(j.m_node))) ?
 			end() : j;
 	}
+	
+	/*记录以k为键值的数*/
 	template<typename Key, typename Value, typename Keyofvalue, typename Compare, typename Alloc>
 	typename rb_tree<Key, Value, Keyofvalue, Compare, Alloc>::size_type
-		rb_tree<Key, Value, Keyofvalue, Compare, Alloc>::count(const key& k) const {
+		rb_tree<Key, Value, Keyofvalue, Compare, Alloc>::count(const key_type& k) const {
 		pair<const_iterator, const_iterator> = equal_range(k);
 		size_type n = 0;
 		distance(p.first, p.second, n);
 		return n;
 	}
+
+	/*找到第一个大于等于k的数*/
 	template<typename Key, typename Value, typename Keyofvalue, typename Compare, typename Alloc>
 	typename rb_tree<Key, Value, Keyofvalue, Compare, Alloc>::iterator
-		rb_tree<Key, Value, Keyofvalue, Compare, Alloc>::lower_bound(const Key& k) {//>=k的第一个节点
+		rb_tree<Key, Value, Keyofvalue, Compare, Alloc>::lower_bound(const key_type& k) {
+		link_type y = m_header;
+		link_type x = m_root();
+		while (x != 0)
+			if (!m_key_compare(s_key(x), k))//令y是第一个>=k的数
+				y = x, x = s_left(x);
+			else
+				x = s_right(x);
+		return iterator(y);
+	}
+
+	template<typename Key, typename Value, typename Keyofvalue, typename Compare, typename Alloc>
+	typename rb_tree<Key, Value, Keyofvalue, Compare, Alloc>::const_iterator
+		rb_tree<Key, Value, Keyofvalue, Compare, Alloc>::lower_bound(const key_type& k) const {//>=k的第一个节点
 		link_type y = m_header;
 		link_type x = m_root();
 		while (x != 0)
@@ -788,33 +817,24 @@ namespace HBtinySTL {
 				x = s_right(x);
 		return iterator(y);
 	}
-	template<typename Key, typename Value, typename Keyofvalue, typename Compare, typename Alloc>
-	typename rb_tree<Key, Value, Keyofvalue, Compare, Alloc>::const_iterator
-		rb_tree<Key, Value, Keyofvalue, Compare, Alloc>::lower_bound(const Key& k) const {//>=k的第一个节点
-		link_type y = m_header;
-		link_type x = m_root();
-		while (x != 0)
-			if (!m_key_compare(s_key(x), k))
-				y = x, x = s_left(x);
-			else
-				x = s_right(x);
-		return iterator(y);
-	}
+	
+	/*找到第一个大于k的数*/
 	template<typename Key, typename Value, typename Keyofvalue, typename Compare, typename Alloc>
 	typename rb_tree<Key, Value, Keyofvalue, Compare, Alloc>::iterator
-		rb_tree<Key, Value, Keyofvalue, Compare, Alloc>::upper_bound(const Key& k) {//>=k的第一个节点
+		rb_tree<Key, Value, Keyofvalue, Compare, Alloc>::upper_bound(const key_type& k) {
 		link_type y = m_header;
 		link_type x = m_root();
 		while (x != 0)
-			if (m_key_compare(k, s_key(x)))
+			if (m_key_compare(k, s_key(x)))//令y是第一个>k的数，不包含=
 				y = x, x = s_left(x);
 			else
 				x = s_right(x);
 		return iterator(y);
 	}
+
 	template<typename Key, typename Value, typename Keyofvalue, typename Compare, typename Alloc>
 	typename rb_tree<Key, Value, Keyofvalue, Compare, Alloc>::const_iterator
-		rb_tree<Key, Value, Keyofvalue, Compare, Alloc>::upper_bound(const Key& k) const {//>=k的第一个节点
+		rb_tree<Key, Value, Keyofvalue, Compare, Alloc>::upper_bound(const key_type& k) const {//>=k的第一个节点
 		link_type y = m_header;
 		link_type x = m_root();
 		while (x != 0)
@@ -825,20 +845,23 @@ namespace HBtinySTL {
 		return iterator(y);
 	}
 
+	/*找到等于键值等于k的迭代器*/
 	template<typename Key, typename Value, typename Keyofvalue, typename Compare, typename Alloc>
 	inline pair<typename rb_tree<Key, Value, Keyofvalue, Compare, Alloc>::iterator,
 		typename rb_tree<Key, Value, Keyofvalue, Compare, Alloc>::iterator>
-		rb_tree<Key, Value, Keyofvalue, Compare, Alloc>::equal_range(const Key& k) {
-		return pair<iterator, iterator>(lower_bound(k), upper_bound(k));
-	}
-	template<typename Key, typename Value, typename Keyofvalue, typename Compare, typename Alloc>
-	inline pair<typename rb_tree<Key, Value, Keyofvalue, Compare, Alloc>::const_iterator,
-		typename rb_tree<Key, Value, Keyofvalue, Compare, Alloc>::const_iterator>
-		rb_tree<Key, Value, Keyofvalue, Compare, Alloc>::equal_range(const Key& k) const {
+		rb_tree<Key, Value, Keyofvalue, Compare, Alloc>::equal_range(const key_type& k) {
 		return pair<iterator, iterator>(lower_bound(k), upper_bound(k));
 	}
 
-	inline int black_count(rb_tree_node_base* node, rb_tree_node_base* root) {//自node至root路径black节点数量
+	template<typename Key, typename Value, typename Keyofvalue, typename Compare, typename Alloc>
+	inline pair<typename rb_tree<Key, Value, Keyofvalue, Compare, Alloc>::const_iterator,
+		typename rb_tree<Key, Value, Keyofvalue, Compare, Alloc>::const_iterator>
+		rb_tree<Key, Value, Keyofvalue, Compare, Alloc>::equal_range(const key_type& k) const {
+		return pair<iterator, iterator>(lower_bound(k), upper_bound(k));
+	}
+
+	/*自node至root路径black节点数量*/
+	inline int black_count(rb_tree_node_base* node, rb_tree_node_base* root) {
 		if (node == 0) {
 			return 0;
 		}
@@ -850,9 +873,10 @@ namespace HBtinySTL {
 		}
 	}
 
+	/*检验红黑树的合法性*/
 	template<typename Key, typename Value, typename Keyofvalue, typename Compare, typename Alloc>
 	bool rb_tree<Key, Value, Keyofvalue, Compare, Alloc>::rb_verify()const {
-		if (m_node_count == 0 || begin() == end())
+		if (m_node_count == 0 || begin() == end())//仅有头节点
 			return m_node_count == 0 && begin() == end() && m_header->m_left == m_header && m_header->m_right == m_header;
 		int len = black_count(m_leftmost(), m_root());
 		for (const_iterator it = begin(); it != end(); ++it) {
@@ -860,13 +884,13 @@ namespace HBtinySTL {
 			link_type l = s_left(x);
 			link_type r = s_right(x);
 			if (x->m_color == rb_tree_red)
-				if (l && l->m_color == rb_tree_red || r && r->m_color == rb_tree_red)
+				if (l && l->m_color == rb_tree_red || r && r->m_color == rb_tree_red)//是否有连续红
 					return false;
-			if (l && m_key_compare(s_key(x), s_key(l)))
+			if (l && m_key_compare(s_key(x), s_key(l)))//左子节点与父节点的比较是否合规
 				return false;
-			if (r && m_key_compare(s_key(r), s_key(x)))
+			if (r && m_key_compare(s_key(r), s_key(x)))//左子节点与父节点的比较是否合规
 				return false;
-			if (!l && !r && black_count(x, m_root()) != len)
+			if (!l && !r && black_count(x, m_root()) != len)//叶子节点时黑色节点的数量
 				return false;
 		}
 		if (m_leftmost() != rb_tree_node_base::minimun(m_root()))
@@ -875,6 +899,8 @@ namespace HBtinySTL {
 			return false;
 		return true;
 	}
+	
+	/*复制x为根的子树到p为头节点的树下*/
 	template<typename Key, typename Value, typename Keyofvalue, typename Compare, typename Alloc>
 	typename rb_tree<Key, Value, Keyofvalue, Compare, Alloc>::link_type
 		rb_tree<Key, Value, Keyofvalue, Compare, Alloc>::m_copy(link_type x, link_type p) {
@@ -882,21 +908,23 @@ namespace HBtinySTL {
 		top->m_parent = p;
 		try {
 			if (x->m_right)
-				top->m_right = m_copy(s_right(x), top);
+				top->m_right = m_copy(s_right(x), top);//递归调用m_copy，可以理解为右子树已经全部复制完毕
 			p = top;
 			x = s_left(x);
 
 			while (x != 0) {
-				link_type y = m_clone_node(x);
+				link_type y = m_clone_node(x);//接下来复制左子树
 				p->m_left = y;
 				y->m_parent = p;
 				if (x->m_right)
-					y->m_right = m_copy(s_right(x), y);
+					y->m_right = m_copy(s_right(x), y);//左子树的复制同样也是先左子树的右子树
 				p = top;
 				x = s_left(x);
 			}
 		}
-
+		catch (...) {
+			m_erase(top);
+		}
 	}
 
 }

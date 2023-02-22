@@ -27,8 +27,8 @@ namespace HBtinySTL {
 
 		T* m_cur;
 		T* m_first;
-		T* m_last;
-		map_pointer m_node;
+		T* m_last;		//此node中的当前位置、头和尾
+		map_pointer m_node;//指向中控器map中的当前node
 
 		deque_iterator(T* x, map_pointer y)
 			:m_cur(x), m_first(*y), m_last(*y + _S_buffer_size()), m_node(y) {}
@@ -104,7 +104,7 @@ namespace HBtinySTL {
 		bool operator<=(const self& x) const { return !(x < *this); }
 		bool operator>=(const self& x) const { return !(*this < x); }
 
-		void m_set_node(map_pointer new_node) {
+		void m_set_node(map_pointer new_node) {//只是移动m_node，并不申请或释放内存
 			m_node = new_node;
 			m_first = *new_node;
 			m_last = m_first + difference_type(_S_buffer_size());
@@ -137,13 +137,13 @@ namespace HBtinySTL {
 		enum { _S_initial_map_size = 8 };
 
 	protected:
-		T** m_map;
-		size_t m_map_size;
-		iterator m_start;
-		iterator m_finish;
+		T** m_map;			//中控器的开始
+		size_t m_map_size;	//中控器的大小
+		iterator m_start;	//头节点
+		iterator m_finish;	//尾节点
 
 		typedef simple_alloc<T, Alloc> node_alloc_type;
-		typedef simple_alloc<T*, Alloc> map_alloc_type;
+		typedef simple_alloc<T*, Alloc> map_alloc_type;		//map中元素是node地址，为T*类型，所以m_map为T**类型
 
 		T* m_allocate_node() { return node_alloc_type::allocate(__deque_buf_size(sizeof(T))); }
 		void m_deallocate_node(T* p) {
@@ -168,7 +168,7 @@ namespace HBtinySTL {
 		T** node_start = m_map + (m_map_size - num_node) / 2;//预留的空间两侧均匀分配
 		T** node_finish = node_start + num_node;
 		try {
-			m_create_nodes(node_start, node_finish);
+			m_create_nodes(node_start, node_finish);	//为map上申请node内存并记录
 		}
 		catch (...) {
 			m_deallocate_map(m_map, m_map_size);
@@ -181,6 +181,7 @@ namespace HBtinySTL {
 		m_finish.m_cur = m_finish.m_first + num_element % __deque_buf_size(sizeof(T));
 	}
 
+	/*作用是申请内存填充map中的node*/
 	template<typename T, typename Alloc>
 	void deque_base<T, Alloc>::m_create_nodes(T** node_start, T** node_finish) {
 		T** cur;
@@ -193,7 +194,7 @@ namespace HBtinySTL {
 			m_destroy_nodes(node_start, cur);
 		}
 	}
-
+	/*作用是释放map中的node*/
 	template<typename T, typename Alloc>
 	void deque_base<T, Alloc>::m_destroy_nodes(T** node_start, T** node_finish) {
 		for (T** temp = node_start; temp < node_finish; ++temp)
@@ -279,10 +280,10 @@ namespace HBtinySTL {
 		deque& operator=(const deque& x) {
 			const size_type len = size();
 			if (&x == this) return *this;
-			if (len >= x.size()) {
+			if (len >= x.size()) {//擦除多余元素
 				erase(copy(x.begin(), x.end(), m_start), m_finish);
 			}
-			else {
+			else {//插入不足元素
 				const_iterator mid = x.begin() + difference_type(len);
 				copy(x.begin(), mid, m_start());
 				insert(m_finish, mid, x.end());
@@ -371,12 +372,13 @@ namespace HBtinySTL {
 				--temp;
 				return temp;
 			}
-			else
+			else//除了头和尾的情况
 				return m_insert_aux(position, x);
 		}
 		iterator insert(iterator position) {
 			return insert(position, value_type());
 		}
+
 		void insert(iterator pos, size_type n, const value_type& x) {
 			m_fill_insert(pos, n, x);
 		}
@@ -401,7 +403,15 @@ namespace HBtinySTL {
 			iterator next = pos;
 			++next;
 			difference_type index = pos - m_start;
-			if (size_type(index))
+			if (size_type(index) < (this->size() >> 1)){//在前半部分
+				copy_backward(m_start, pos, next);
+				pop_front();
+			}
+			else {//在后半部分
+				copy(next, m_finish, pos);
+				pop_back();
+			}
+			return m_start + index;
 		}
 		iterator erase(iterator first, iterator last);
 		void clear();
@@ -452,8 +462,9 @@ namespace HBtinySTL {
 		void m_reallocate_map(size_type node_to_add, bool add_at_front);
 	};
 
-				template<typename T, typename Alloc>
-		void deque<T, Alloc>::m_fill_insert(iterator pos, size_type n, const value_type& x) {
+	/*处理头尾插入，剩下交给m_insert_aux*/
+	template<typename T, typename Alloc>
+	void deque<T, Alloc>::m_fill_insert(iterator pos, size_type n, const value_type& x) {
 			if (pos.m_cur == m_start.m_cur) {
 				iterator new_start = m_reserve_elements_at_front(n);
 					try {
@@ -478,8 +489,9 @@ namespace HBtinySTL {
 				m_insert_aux(pos, n, x);
 		}
 
-		template<typename T, typename Alloc>
-		void deque<T, Alloc>::insert(iterator position, const value_type* first, const value_type* last) {
+	/*处理头尾插入，剩下交给m_insert_aux*/
+	template<typename T, typename Alloc>
+	void deque<T, Alloc>::insert(iterator position, const value_type* first, const value_type* last) {
 			size_type n = last - first;
 			if (pos.m_cur == m_start.m_cur) {
 				iterator new_start = m_reserve_elements_at_front(n);
@@ -505,8 +517,8 @@ namespace HBtinySTL {
 				m_insert_aux(pos, first, last, n);
 		}
 
-		template<typename T, typename Alloc>
-		void deque<T, Alloc>::insert(iterator pos, const_iterator first, const_iterator last) {
+	template<typename T, typename Alloc>
+	void deque<T, Alloc>::insert(iterator pos, const_iterator first, const_iterator last) {
 			size_type n = last - first;
 			if (pos.m_cur == m_start.m_cur) {
 				iterator new_start = m_reserve_elements_at_front(n);
@@ -532,8 +544,8 @@ namespace HBtinySTL {
 				m_insert_aux(pos, first, last, n);
 		}
 
-		template<typename T, typename Alloc>
-		typename deque<T, Alloc>::iterator deque<T, Alloc>::erase(iterator first, iterator last) {
+	template<typename T, typename Alloc>
+	typename deque<T, Alloc>::iterator deque<T, Alloc>::erase(iterator first, iterator last) {
 			if (first == m_start && last == m_finish) {
 				clear();
 				return m_finish;
@@ -541,7 +553,7 @@ namespace HBtinySTL {
 			else {
 				difference_type n = last - first;
 				difference_type elems_before = first - m_start;
-				if (elems_before < difference_type((this->size() - n) / 2)) {
+				if (elems_before < difference_type((this->size() - n) / 2)) {//处理前半部分的情况，同时将空闲的node释放
 					copy_backward(m_start, first, last);
 					iterator new_start = m_start + n;
 					destroy(m_start, new_start);
@@ -559,24 +571,25 @@ namespace HBtinySTL {
 			}
 		}
 
-		template<typename T, typename Alloc>
-		void deque<T, Alloc>::clear() {
-			for (map_pointer node = m_start.m_node; node < m_finish.m_node; ++node) {
+	template<typename T, typename Alloc>
+	void deque<T, Alloc>::clear() {
+			for (map_pointer node = m_start.m_node; node < m_finish.m_node; ++node) {//处理整段内存
 				destroy(*node, *node + _S_buffer_size());
 				m_deallocate_node(*node);
 			}
-			if (m_start.m_node != m_finish.m_node) {
+			if (m_start.m_node != m_finish.m_node) {//处理两端的零碎的内存
 				destroy(m_start.m_cur, m_start.m_last);
 				destroy(m_finish.m_first, m_finish.m_cur);
 				m_deallocate_node(m_finish.m_first);
 			}
-			else
+			else//处理整个不到一个node的情况
 				destroy(m_start.m_cur, m_finish.m_cur);
 			m_finish = m_start;
 		}
 
-		template<typename T, typename Alloc>
-		void deque<T, Alloc>::m_fill_initialize(const value_type& value) {
+	//将当前元素改为value，不改变已有内存
+	template<typename T, typename Alloc>
+	void deque<T, Alloc>::m_fill_initialize(const value_type& value) {
 			map_pointer cur;
 			try {
 				for (cur = m_start.m_node; cur < m_finish.m_node; ++cur)
@@ -588,8 +601,9 @@ namespace HBtinySTL {
 			}
 		}
 
-		template<typename T, typename Alloc>
-		void deque<T, Alloc>::m_push_back_aux(const value_type& t) {
+	/*处理需要申请新内存的情况*/
+	template<typename T, typename Alloc>
+	void deque<T, Alloc>::m_push_back_aux(const value_type& t) {
 			value_type t_copy = t;
 			m_reserve_map_at_back();
 			*(m_finish.m_node + 1) = m_allocate_node();
@@ -603,8 +617,8 @@ namespace HBtinySTL {
 			}
 		}
 
-		template<typename T, typename Alloc>
-		void deque<T, Alloc>::m_push_back_aux() {
+	template<typename T, typename Alloc>
+	void deque<T, Alloc>::m_push_back_aux() {
 			m_reserve_map_at_back();
 			*(m_finish.m_node + 1) = m_allocate_node();
 			try {
@@ -617,8 +631,9 @@ namespace HBtinySTL {
 			}
 		}
 
-		template<typename T, typename Alloc>
-		void deque<T, Alloc>::m_push_front_aux(const value_type& t) {
+	/*处理需要申请新内存的情况*/
+	template<typename T, typename Alloc>
+	void deque<T, Alloc>::m_push_front_aux(const value_type& t) {
 			value_type t_copy = t;
 			m_reserve_map_at_front();
 			*(m_start.m_node - 1) = m_allocate_node();
@@ -633,8 +648,8 @@ namespace HBtinySTL {
 			}
 		}
 
-		template<typename T, typename Alloc>
-		void deque<T, Alloc>::m_push_front_aux() {
+	template<typename T, typename Alloc>
+	void deque<T, Alloc>::m_push_front_aux() {
 			m_reserve_map_at_front();
 			*(m_start.m_node - 1) = m_allocate_node();
 			try {
@@ -648,25 +663,26 @@ namespace HBtinySTL {
 			}
 		}
 
-		template<typename T, typename Alloc>
-		void deque<T, Alloc>::m_pop_back_aux() {
-			m_deallocate_node(m_finish, m_first);
-			m_finish.m_set_node(m_finish.m_node - 1);
-			m_finish.m_cur = m_finish.m_last - 1;
-			destroy(m_finish.m_cur);
-		}
+	/*释放多余的内存*/
+	template<typename T, typename Alloc>
+	void deque<T, Alloc>::m_pop_back_aux() {
+		m_deallocate_node(m_finish.m_first);
+		m_finish.m_set_node(m_finish.m_node - 1);
+		m_finish.m_cur = m_finish.m_last - 1;
+		destroy(m_finish.m_cur);
+	}
 
-		template<typename T, typename Alloc>
-		void deque<T, Alloc>::m_pop_front_aux() {
-			destroy(m_start.m_cur);
-			m_deallocate_node(m_start.m_first);
-			m_start.m_set_node(m_start.m_node + 1);
-			m_start.m_cur = m_start.m_first;
-		}
+	template<typename T, typename Alloc>
+	void deque<T, Alloc>::m_pop_front_aux() {
+		destroy(m_start.m_cur);
+		m_deallocate_node(m_start.m_first);
+		m_start.m_set_node(m_start.m_node + 1);
+		m_start.m_cur = m_start.m_first;
+	}
 
-		template<typename T, typename Alloc>
-		typename deque<T, Alloc>::iterator
-			deque<T, Alloc>::m_insert_aux(iterator pos, const value_type& x) {
+	template<typename T, typename Alloc>
+	typename deque<T, Alloc>::iterator
+		deque<T, Alloc>::m_insert_aux(iterator pos, const value_type& x) {
 			difference_type index = pos - m_start;
 			value_type x_copy = x;
 			if (size_type(index) < this->size() / 2) {
@@ -693,9 +709,9 @@ namespace HBtinySTL {
 			return pos;
 		}
 
-		template<typename T, typename Alloc>
-		typename deque<T, Alloc>::iterator
-			deque<T, Alloc>::m_insert_aux(iterator pos) {
+	template<typename T, typename Alloc>
+	typename deque<T, Alloc>::iterator
+		deque<T, Alloc>::m_insert_aux(iterator pos) {
 			difference_type index = pos - m_start;
 			if (size_type(index) < this->size() / 2) {
 				push_front(front());
@@ -721,8 +737,8 @@ namespace HBtinySTL {
 			return pos;
 		}
 
-		template<typename T, typename Alloc>
-		void deque<T, Alloc>::m_insert_aux(iterator pos, size_type n, const value_type& x) {
+	template<typename T, typename Alloc>
+	void deque<T, Alloc>::m_insert_aux(iterator pos, size_type n, const value_type& x) {
 			const difference_type elems_before = pos - m_start;
 			size_type length = this->size();
 			value_type x_copy = x;
@@ -784,8 +800,8 @@ namespace HBtinySTL {
 			}
 		}
 
-		template<typename T, typename Alloc>
-		void deque<T, Alloc>::m_insert_aux(iterator pos, const value_type* first, const value_type* last, size_type n) {
+	template<typename T, typename Alloc>
+	void deque<T, Alloc>::m_insert_aux(iterator pos, const value_type* first, const value_type* last, size_type n) {
 			const difference_type elems_before = pos - m_start;
 			size_type length = this->size();
 			if (elems_before < difference_type(length / 2)) {
@@ -844,8 +860,8 @@ namespace HBtinySTL {
 			}
 		}
 
-		template<typename T, typename Alloc>
-		void deque<T, Alloc>::m_insert_aux(iterator pos, const_iterator first, const_iterator last, size_type n) {
+	template<typename T, typename Alloc>
+	void deque<T, Alloc>::m_insert_aux(iterator pos, const_iterator first, const_iterator last, size_type n) {
 			const difference_type elems_before = pos - m_start;
 			size_type length = this->size();
 			if (elems_before < difference_type(length / 2)) {
@@ -904,8 +920,8 @@ namespace HBtinySTL {
 			}
 		}
 
-		template<typename T, typename Alloc>
-		void deque<T, Alloc>::m_new_elements_at_front(size_type new_elems) {
+	template<typename T, typename Alloc>
+	void deque<T, Alloc>::m_new_elements_at_front(size_type new_elems) {
 			size_type new_node = (new_elems + _S_buffer_size() - 1) / _S_buffer_size();
 			m_reserve_map_at_front(new_node);
 			size_type i;
@@ -921,8 +937,8 @@ namespace HBtinySTL {
 			}
 		}
 
-		template<typename T, typename Alloc>
-		void deque<T, Alloc>::m_new_elements_at_back(size_type new_elems) {
+	template<typename T, typename Alloc>
+	void deque<T, Alloc>::m_new_elements_at_back(size_type new_elems) {
 			size_type new_node = (new_elems + _S_buffer_size() - 1) / _S_buffer_size();
 			m_reserve_map_at_back(new_node);
 			size_type i;
@@ -938,13 +954,13 @@ namespace HBtinySTL {
 			}
 		}
 
-		template<typename T, typename Alloc>
-		void deque<T, Alloc>::m_reallocate_map(size_type node_to_add, bool add_at_front) {
+	template<typename T, typename Alloc>
+	void deque<T, Alloc>::m_reallocate_map(size_type node_to_add, bool add_at_front) {
 			size_type old_num_nodes = m_finish.m_node - m_start.m_node + 1;
 			size_type new_num_nodes = old_num_nodes + node_to_add;
 			map_pointer new_node_start;
-			if (m_map_size > 2 * new_num_nodes) {
-				new_node_start = m_map + (m_map_size - new_num_nodes) / 2 +
+			if (m_map_size > 2 * new_num_nodes) {//不需要申请新的map
+				new_node_start = m_map + (m_map_size - new_num_nodes) / 2 +//若add_at_front，那么new_start后移留空间
 					(add_at_front ? node_to_add : 0);
 				if (new_node_start < m_start.m_node)
 					copy(m_start.m_node, m_finish.m_node + 1, new_node_start);
@@ -953,7 +969,7 @@ namespace HBtinySTL {
 			}
 			else {
 				size_type new_map_size = m_map_size + max(m_map_size, node_to_add) + 2;
-				map_pointer new_map = m_allocate_map(new_map_size);
+				map_pointer new_map = m_allocate_map(new_map_size);		//申请新的map
 				new_node_start = new_map + (new_map_size - new_num_nodes) / 2
 					+ (add_at_front ? node_to_add : 0);
 				copy(m_start.m_node, m_finish.m_node + 1, new_node_start);
@@ -966,19 +982,19 @@ namespace HBtinySTL {
 		}
 
 
-		template <class T, class Alloc>
-		inline bool operator==(const deque<T, Alloc>& x,
-			const deque<T, Alloc>& y) {
+	template <class T, class Alloc>
+	inline bool operator==(const deque<T, Alloc>& x,
+		const deque<T, Alloc>& y) {
 			return x.size() == y.size() &&
 				equal(x.begin(), x.end(), y.begin());
 		}
 
-		template <class T, class Alloc>
-		inline bool operator<(const deque<T, Alloc>& x,
-			const deque<T, Alloc>& y) {
-			return lexicographical_compare(x.begin(), x.end(),
-				y.begin(), y.end());
-		}
+	template <class T, class Alloc>
+	inline bool operator<(const deque<T, Alloc>& x,
+		const deque<T, Alloc>& y) {
+		return lexicographical_compare(x.begin(), x.end(),
+			y.begin(), y.end());
+	}
 
 }
 #endif

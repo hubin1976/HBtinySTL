@@ -44,7 +44,7 @@ namespace HBtinySTL {
 		*(first + holeIndex) = value;
 	}
 
-	/*由客户端再执行pop_back*/
+	/*将堆顶元素放至最后一个，然后将乱序的堆重排，需要由客户端再执行pop_back*/
 	template<typename RandomAccessIterator>
 	inline void pop_heap(RandomAccessIterator first, RandomAccessIterator last) {
 		_pop_heap(first, last, value_type(first));
@@ -113,7 +113,7 @@ namespace HBtinySTL {
 		Distance len = last - first;
 		Distance parent = (len - 2) / 2;
 
-		while (true) {
+		while (true) {//自最底层的子树开始向上排序
 			__adjust_heap(first, parent, len, T(*(first + parent)));
 			if (parent == 0) return;
 			parent--;

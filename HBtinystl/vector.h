@@ -4,6 +4,8 @@
 #include <concept_checks.h>
 #include <stddef.h>
 #include <memory.h>
+
+/**/
 namespace HBtinySTL {
 
 	template <typename T, class Alloc>
@@ -29,7 +31,7 @@ namespace HBtinySTL {
 
 		vector_base(const Alloc&) :m_start(0), m_finish(0), m_end_of_storage(0) {}
 		vector_base(size_t n, const Alloc&) :m_start(0), m_finish(0), m_end_of_storage(0) {
-			m_start = m_allocator(n);
+			m_start = m_allocato(n);
 			m_finish = m_start;
 			m_end_of_storage = m_start + n;
 		}
@@ -41,15 +43,15 @@ namespace HBtinySTL {
 	private:
 		typedef vector_base<T, Alloc> m_base;
 	public:
-		typedef T					value_type;
-		typedef value_type* pointer;
-		typedef const value_type* const_pointer;
-		typedef value_type& reference;
-		typedef value_type* iterator;
-		typedef const value_type* const_iterator;
-		typedef const value_type& const_reference;
-		typedef size_t				size_type;
-		typedef ptrdiff_t			difference_type;
+		typedef T						value_type;
+		typedef value_type*				pointer;
+		typedef const value_type*		const_pointer;
+		typedef value_type&				reference;
+		typedef value_type*				iterator;				//普通指针就能满足vector的需求
+		typedef const value_type*		const_iterator;
+		typedef const value_type&		const_reference;
+		typedef size_t					size_type;
+		typedef ptrdiff_t				difference_type;
 
 		typedef typename m_base::allocator_type allocator_type;
 		allocator_type get_allocator() const { return m_base::get_allocator(); }
@@ -58,37 +60,7 @@ namespace HBtinySTL {
 		typedef reverse_iterator<const_iterator> const_reverse_iterator;
 
 	protected:
-		/*想指定位置插入一个元素，可以处理需要重新申请内存的请求*/
-		void m_insert_aux(iterator position, const T& x) {
-			if (m_finish != m_end_of_storage) {
-				construct(m_finish, *(m_finish - 1));
-				++m_finish;
-				T x_copy = x;
-				copy_backward(position, m_finish - 2, m_finish - 1);
-				*position = x_copy;
-			}
-			else {
-				const size_type old_size = size();
-				const size_type len = old_size == 0 ? 1 : 2 * old_size;
-				iterator new_start = m_allocate(len);
-				iterator new_finish = new_start;
-				try {
-					new_finish = uninitialized_copy(m_start, position, new_start);
-					construct(new_finish, x);
-					++new_finish;
-					new_finish = uninitialized_copy(position, m_finish, new_finish);
-				}
-				catch (...) {
-					destroy(new_start, new_finish);
-					m_deallocate(new_start, len);
-				}
-				destroy(begin(), end());
-				m_deallocate(m_start, m_end_of_storage - m_start);
-				m_start = new_start;
-				m_finish = new_finish;
-				m_end_of_storage = new_start + len;
-			}
-		}
+		void m_insert_aux(iterator position, const T& x);
 		void m_insert_aux(iterator position) {
 			m_insert_aux(position, T());
 		}
@@ -148,32 +120,20 @@ namespace HBtinySTL {
 
 		/*使得vector至少可以容纳 n 个元素*/
 		void reserve(size_type n) {
-			/
-				if (capacity() < n) {
-					const size_type old_size = size();
-					iterator temp = m_allocate_and_copy(n, m_start, m_finish);
-					destroy(m_start, m_finish);
-					m_deallocate(m_start, m_end_of_storage - m_start);
-					m_start = temp;
-					m_finish = temp + old_size;
-					m_end_of_storage = temp + n;
-				}
+			if (capacity() < n) {
+				const size_type old_size = size();
+				iterator temp = m_allocate_and_copy(n, m_start, m_finish);//申请新的足够大小的空间
+				destroy(m_start, m_finish);
+				m_deallocate(m_start, m_end_of_storage - m_start);//销毁旧的空间
+				m_start = temp;
+				m_finish = temp + old_size;
+				m_end_of_storage = temp + n;
+			}
 		}
 
 		/*指定vector内容 为 n 个 val */
 		void assign(size_type n, const T& val) { m_fill_assign(n, val); }
-		void m_fill_assign(size_type n, const T& val) {
-			if (n > capacity()) {
-				vector<T, Alloc> temp(n, val, get_allocateor());
-				temp.swap(*this);
-			}
-			else if (n > size()) {
-				fill(begin(), end(), val);
-				m_finish = uninitialize_fill_n(m_finish, n - size(), val);
-			}
-			else
-				erase(fill_n(begin(), n, val), end());
-		}
+		void m_fill_assign(size_type n, const T& val);
 
 		reference front() { return *begin(); }
 		const_reference front() const { return *begin(); }
@@ -181,7 +141,7 @@ namespace HBtinySTL {
 		const_reference back() const { return *(end() - 1); }
 
 		void push_back(const T& x) {
-			if (m_finish != m_end_of_storage) {
+			if (m_finish != m_end_of_storage) {//处理不用申请内存的情况，需要申请新内存的情况交给m_insert_aux
 				construct(m_finish, x);
 				++m_finish;
 			}
@@ -189,14 +149,14 @@ namespace HBtinySTL {
 				m_insert_aux(end(), x);
 		}
 		void push_back() {
-			if (m_finish != m_end_of_storage) {
+			if (m_finish != m_end_of_storage) {//处理不用申请内存的情况，需要申请新内存的情况交给m_insert_aux
 				construct(m_finish);
 				++m_finish;
 			}
 			else
 				m_insert_aux(end(), x);
 		}
-		void swap(vector<T, Allco>& x) {
+		void swap(vector<T, Allco>& x) {//交换记录内存地址的指针，两者的内容也就交换了，不是复制到一个临时变量，而是交换指针
 			std::swap(m_start, x.m_start);
 			std::swap(m_finish, x.m_finish);
 			std::swap(m_end_of_storage, x.m_end_of_storage);
@@ -204,7 +164,7 @@ namespace HBtinySTL {
 
 		iterator insert(iterator position, const T& x) {
 			size_type n = position - begin();
-			if (m_finish != m_end_of_storage && position == end()) {
+			if (m_finish != m_end_of_storage && position == end()) {//处理不用申请内存的情况，需要申请新内存的情况交给m_insert_aux
 				construct(m_finish, x);
 				++m_finish;
 			}
@@ -214,7 +174,7 @@ namespace HBtinySTL {
 		}
 		iterator insert(iterator position) {
 			size_type n = position - begin();
-			if (m_finish != m_end_of_storage && position == end()) {
+			if (m_finish != m_end_of_storage && position == end()) {//处理不用申请内存的情况，需要申请新内存的情况交给m_insert_aux
 				construct(m_finish);
 				++m_finish;
 			}
@@ -223,96 +183,15 @@ namespace HBtinySTL {
 			return begin() + n;
 		}
 
-		/*向指定位置插入[first, last)中的内容，可以处理需要申请内存的情况*/
-		void insert(iterator position, const_iterator first, const_iterator last) {
-			if (first == last) return;
-			size_type n = 0;
-			distance(first, last, n);
-			if (size_type(m_end_of_storage - m_finish) >= n) {
-				const size_type elems = m_finish - position;
-				iterator old_finish = m_finish;
-				if (elems > n) {
-					uninitialized_copy(m_finish - n, m_finish, m_finish);
-					m_finish += n;
-					copy_backward(position, old_finish - n, old_finish);
-					copy(first, last, position);
-				}
-				else {
-					uninitialized_copy(first + elems, last, m_finish);
-					m_finish += n - elems;
-					uninitialized_copy(position, elems, m_finish);
-					m_finish += elems;
-					copy(first, first + elems, position);
-				}
-			}
-			else {
-				const size_type old_size = size();
-				const size_type len = old_size + max(old_size, n);
-				iterator new_start = m_allocate(len);
-				iterator new_finish = new_start;
-				try {
-					new_finish = uninitialized_copy(m_start, position, new_start);
-					new_finish = uninitialized_copy(first, last, new_finish);
-					new_finish = uninitialized_copy(position, m_finish, new_finish);
-				}
-				catch (...) {
-					destroy(new_start, new_finish);
-					m_deallocate(new_start, len);
-				}
-				destroy(m_start, m_finish);
-				m_deallocate(m_start, m_end_of_storage - m_start);
-				m_start = new_start;
-				m_finish = new_finish;
-				m_end_of_storage = new_start + len;
-			}
-		}
+		
+		void insert(iterator position, const_iterator first, const_iterator last);
 
 		/*向指定位置插入n个为x的内容，可以处理需要申请内存的情况*/
 		void insert(iterator position, size_type n, const T& x) {
 			m_fill_insert(position, n, x);
 		}
 
-		void m_fill_insert(iterator position, size_type n, const T& x) {
-			if (n == 0) return;
-			if (size_type(m_end_of_storage - m_finish) >= n) {
-				T x_copy = x;
-				const size_type elems = m_finish - position;
-				iterator old_finish = m_finish;
-				if (elems > n) {
-					uninitialized_copy(m_finish - n, m_finish, m_finish);
-					m_finish += n;
-					copy_backward(position, m_finish - n, old_finish);
-					fill(position, position + n, x_copy);
-				}
-				else {
-					uninitialized_fill_n(m_finish, n - elems, x_copy);
-					m_finish += n - elems;
-					uninitialized_copy(position, old_finish, m_finish);
-					m_finish += elems;
-					fill(position, eld_finish, x_copy);
-				}
-			}
-			else {
-				const size_type old_size = size();
-				const size_type len = old_size + max(old_size, n);
-				iterator new_start = m_allocate(len);
-				iterator new_finish = new_start;
-				try {
-					new_finish = uninitialized_copy(m_start, position, new_start);
-					new_finish = uninitialized_fill_n(new_finish, n, x);
-					new_finish = uninitialized_copy(position, m_finish, new_finish);
-				}
-				catch (...) {
-					destroy(new_start, new_finish);
-					m_deallocate(new_start, len);
-				}
-				destroy(m_start, m_finish);
-				m_deallocate(m_start, m_end_of_storage - m_start);
-				m_start = new_start;
-				m_finish = new_finish;
-				m_end_of_storage = new_start + len;
-			}
-		}
+		void m_fill_insert(iterator position, size_type n, const T& x);
 
 		void pop_back() {
 			--m_finish;
@@ -334,7 +213,7 @@ namespace HBtinySTL {
 			return first;
 		}
 
-		/*重新调整vector为new_size个 x */
+		/*重新调整vector的size为new_size，多余部分使用x初始化*/
 		void resize(size_type new_size, const T& x) {
 			if (new_size < size())
 				erase(begin() + new_size, end());
@@ -384,6 +263,144 @@ namespace HBtinySTL {
 		}
 		m_finish = m_start + xlen;
 	}
+
+	/*想指定位置插入一个元素，可以处理需要重新申请内存的请求*/
+	template<typename T, typename Alloc>
+	void vector<T, Alloc>::m_insert_aux(iterator position, const T& x) {
+		if (m_finish != m_end_of_storage) {/*当前空间足够时，将position之后的内容整体后移，注意使用copy_backward从后向前复制*/
+			construct(m_finish, *(m_finish - 1));
+			++m_finish;
+			T x_copy = x;
+			copy_backward(position, m_finish - 2, m_finish - 1);
+			*position = x_copy;
+		}
+		else {/*当前空间不足时，首先申请新的大小为当前两倍的空间，在将position之前的内容复制，插入val，继续复制其余的内容*/
+			const size_type old_size = size();
+			const size_type len = old_size == 0 ? 1 : 2 * old_size;
+			iterator new_start = m_allocate(len);
+			iterator new_finish = new_start;
+			try {
+				new_finish = uninitialized_copy(m_start, position, new_start);
+				construct(new_finish, x);
+				++new_finish;
+				new_finish = uninitialized_copy(position, m_finish, new_finish);
+			}
+			catch (...) {
+				destroy(new_start, new_finish);
+				m_deallocate(new_start, len);
+			}
+			destroy(begin(), end());
+			m_deallocate(m_start, m_end_of_storage - m_start);
+			m_start = new_start;
+			m_finish = new_finish;
+			m_end_of_storage = new_start + len;
+		}
+	}
+
+	/*指定vector内容 为 n 个 val */
+	template<typename T, typename Alloc>
+	void vector<T, Alloc>::m_fill_assign(size_type n, const T& val) {
+		if (n > capacity()) {
+			vector<T, Alloc> temp(n, val, get_allocateor());//容量不足时申请新的vector并交换，旧的vector离开函数时自动析构释放内存
+			temp.swap(*this);
+		}
+		else if (n > size()) {
+			fill(begin(), end(), val);						
+			m_finish = uninitialize_fill_n(m_finish, n - size(), val);//将旧内容更改为val，填充新内容
+		}
+		else
+			erase(fill_n(begin(), n, val), end());//将前n个更改为val，擦除多余内容
+	}
+
+	/*向指定位置插入[first, last)中的内容，可以处理需要申请内存的情况*/
+	template<typename T, typename Alloc>
+	void vector<T, Alloc>::insert(iterator position, const_iterator first, const_iterator last) {
+		if (first == last) return;
+		size_type n = 0;
+		distance(first, last, n);
+		if (size_type(m_end_of_storage - m_finish) >= n) {//不需要申请新内存
+			const size_type elems = m_finish - position;
+			iterator old_finish = m_finish;
+			if (elems > n) {//这两种情况的区别在于unitialized和copy的不同，需要不同的操作
+				uninitialized_copy(m_finish - n, m_finish, m_finish);
+				m_finish += n;
+				copy_backward(position, old_finish - n, old_finish);
+				copy(first, last, position);
+			}
+			else {
+				uninitialized_copy(first + elems, last, m_finish);
+				m_finish += n - elems;
+				uninitialized_copy(position, elems, m_finish);
+				m_finish += elems;
+				copy(first, first + elems, position);
+			}
+		}
+		else {//需要申请新的内存，然后分三段复制
+			const size_type old_size = size();
+			const size_type len = old_size + max(old_size, n);
+			iterator new_start = m_allocate(len);
+			iterator new_finish = new_start;
+			try {
+				new_finish = uninitialized_copy(m_start, position, new_start);
+				new_finish = uninitialized_copy(first, last, new_finish);
+				new_finish = uninitialized_copy(position, m_finish, new_finish);
+			}
+			catch (...) {
+				destroy(new_start, new_finish);
+				m_deallocate(new_start, len);
+			}
+			destroy(m_start, m_finish);
+			m_deallocate(m_start, m_end_of_storage - m_start);
+			m_start = new_start;
+			m_finish = new_finish;
+			m_end_of_storage = new_start + len;
+		}
+	}
+
+	/*向指定位置插入n个为x的内容，可以处理需要申请内存的情况，实现上与insert(position, first, last)相同*/
+	template<typename T, typename Alloc>
+	void vector<T, Alloc>::m_fill_insert(iterator position, size_type n, const T& x) {
+		if (n == 0) return;
+		if (size_type(m_end_of_storage - m_finish) >= n) {
+			T x_copy = x;
+			const size_type elems = m_finish - position;
+			iterator old_finish = m_finish;
+			if (elems > n) {
+				uninitialized_copy(m_finish - n, m_finish, m_finish);
+				m_finish += n;
+				copy_backward(position, m_finish - n, old_finish);
+				fill(position, position + n, x_copy);
+			}
+			else {
+				uninitialized_fill_n(m_finish, n - elems, x_copy);
+				m_finish += n - elems;
+				uninitialized_copy(position, old_finish, m_finish);
+				m_finish += elems;
+				fill(position, eld_finish, x_copy);
+			}
+		}
+		else {
+			const size_type old_size = size();
+			const size_type len = old_size + max(old_size, n);
+			iterator new_start = m_allocate(len);
+			iterator new_finish = new_start;
+			try {
+				new_finish = uninitialized_copy(m_start, position, new_start);
+				new_finish = uninitialized_fill_n(new_finish, n, x);
+				new_finish = uninitialized_copy(position, m_finish, new_finish);
+			}
+			catch (...) {
+				destroy(new_start, new_finish);
+				m_deallocate(new_start, len);
+			}
+			destroy(m_start, m_finish);
+			m_deallocate(m_start, m_end_of_storage - m_start);
+			m_start = new_start;
+			m_finish = new_finish;
+			m_end_of_storage = new_start + len;
+		}
+	}
+
 
 
 }
